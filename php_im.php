@@ -10,6 +10,8 @@ $read  = array();
 $write = array();
 $except = array();
 
+$meg = array(); //存放待发送的消息
+
 $s_socket_uri = 'tcp://127.0.0.1:8081';
 $s_socket = stream_socket_server($s_socket_uri, $errno, $errstr) OR
     trigger_error("Failed to create socket: $s_socket_uri, Err($errno) $errstr", E_USER_ERROR);
@@ -33,6 +35,7 @@ while(1){
                     $connection = stream_socket_accept($s_socket, 60, $peer);
                     echo "accept client".$connection;
                     $read[] = $connection;
+                    $meg[]= array($connection=>array());
                     echo "-----------";
                     var_dump($read);
 
@@ -44,7 +47,7 @@ while(1){
                         //所以虽然一定返回指定长度 存疑 仍然要循环判断得到的长度
                         //false的情况是套接字断开吗 close fd?
                         echo "getinto con--------";
-                        if (false !== ($header = stream_socket_recvfrom($fd,8))) {
+                        if (false !== ($header = fread($fd,8))) {
 
 
                                   //找到数据包头位置，第一个magic?判断从此处开始的长度是否大于协议头长度。
@@ -62,20 +65,19 @@ while(1){
 
 
 
-                                  $resarr = unpack('nmagic/ntype/Ibodylength',$header);
+                                  $resarr = unpack('nmagic/nsign/ntype/Ibodylength',$header);
     
 
                                  //$resarr = unpack('nmagic/ntype/Ibodylength/a*msg',$buf);
 
                                  $magic = $resarr['magic'];
+                                 $sign = $resarr['sign'];
                                  $type = $resarr['type'];
                                  $msglength = $resarr['bodylength'];
                                  
-                                 if (false !== ($msg = stream_socket_recvfrom($fd,$msglength))) {
+                                 if (false !== ($msg = fread($fd,$msglength))) {
                                       
                                       if(strlen($msg) < $msglength)continue;
-
-
 
                                  }
 
@@ -95,20 +97,20 @@ while(1){
                                 $result = mysqli_query($connect,$sql);
                                 $row = mysqli_fetch_row($result);
                                 if(!$row){
-                                  stream_socket_sendto($connection,'0');
+                                  fwrite($connection,'0');
 
                                 }
                                 //md5
                                 if($password != $row['password']){
-                                  stream_socket_sendto($connection,'0');
+                                  fwrite($connection,'0');
 
                                 }
 
                                   $user_online[$id] = $connection;
-                                  stream_socket_sendto($connection,'1');
+                                  fwrite($connection,'1');
                                   $token = create_token();
                                   $token_pool[$connection] = $token;
-                                  stream_socket_sendto($connection,$token);
+                                  fwrite($connection,$token);
 
                                   echo "iamhere";
                                   var_dump($user_online);
@@ -124,15 +126,34 @@ while(1){
                                $toMsg = substr($left,$spos + 1);
                                
                                if(isset($user_online[$toId])){
-                               $connection = $user_online[$toId]
+                               $con = $user_online[$toId];
+                               
+                               $write[] = $con;//加到写事件中。
+
+                               $toMsg = msg_encode(0xabcd,0x03,0x02,$msg);
+                              
+                               foreach($meg as $k=>$v){
+                                if(isset($v[$con])){
+                                  $v[$con][] = $toMsg;
+                                  break;
+                                }
+                               }
+                                                                                            
+
+
                                 
                              }else{
                               //不在线，存入数据库
+                              $sql = "insert into msg(receid,msg)values($toId,$toMsg)
+                              ";
+                                $result = mysqli_query($connect,$sql);
+
                              }
 
 
                             }
-                              
+                             
+
                             //断线重连
                             if($type == 0x02){
                                 if(in_array($msg,$token_pool)){
@@ -146,7 +167,24 @@ while(1){
                 }
             }
         }
-
+         if($write){
+            foreach($write as $fd){
+              $fd_key = (int)$fd;
+              //既然触发了写事件，该fd一定在线，不需要到user_online中判断。
+              foreach($meg as $k=>$v){
+                if(isset($v[$fd])){
+                  foreach($v as &$sv){
+                    $flen=fwrite($fd,$sv);
+                    if($flen < strlen($sv)){
+                     $sv = substr($sv,0,$flen);
+                     break;
+                    }
+                  }
+                  break;
+                } 
+              }
+            }
+         }
         if($except) {
             foreach($except as $fd) {
                 $fd_key = (int) $fd;
@@ -172,7 +210,12 @@ function create_token(){
     }
 
     return $token;
-}       
+} 
+
+function msg_encode($magic=0xabcd,$sign,$type,$msg){
+
+return  pack('nnnI',0xabcd,$sign,$type,strlen($msg)).$msg;
+}      
 
 
 
