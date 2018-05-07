@@ -43,4 +43,32 @@ $buff = $buff . $msg;
             stream_set_read_buffer($this->_socket, 0);
         }*/
 
+
+
+
+
+timer(5,signalHandler);
+
+function timer($time,$signalHandler){
+
+    pcntl_signal(SIGALRM, $signalHandler);
+    
+    
+    pcntl_alarm($time);
+    
+    
+
+    while(true){
+       pcntl_signal_dispatch(); 
+       sleep(1);
+    }
+    
+
+}
+
+function signalHandler(){
+  echo 1;
+  pcntl_alarm(5);
+}
+
 ?>
