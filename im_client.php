@@ -1,5 +1,6 @@
-
 <?php 
+require_once 'common/functions.php';
+
 //@
 $fp = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
  $con=socket_connect($fp, '127.0.0.1', 8081);
@@ -47,17 +48,14 @@ $buff = $buff . $msg;
 
 
 
-timer(5,signalHandler);
+timer(5,'signalHandler');
 
 function timer($time,$signalHandler){
 
     pcntl_signal(SIGALRM, $signalHandler);
-    
-    
+        
     pcntl_alarm($time);
-    
-    
-
+        
     while(true){
        pcntl_signal_dispatch(); 
        sleep(1);
@@ -66,9 +64,25 @@ function timer($time,$signalHandler){
 
 }
 
+
+
+
+
 function signalHandler(){
-  echo 1;
+  
+  $heartbeat=msg_encode(0x01,0x03,'');
+
+  global $fd;
+
+  $len=fwrite($fd,$heartbeat);
+
+  while($len != $heartbeat){
+  $len = fwirte($fd,substr($heartbeat, $len-1));
+  }
+
   pcntl_alarm(5);
 }
+
+
 
 ?>

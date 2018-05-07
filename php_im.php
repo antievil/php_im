@@ -1,4 +1,7 @@
 <?php
+
+require_once 'common/functions.php';
+
  $user_online= array();
  $token_pool = array();
 
@@ -87,7 +90,7 @@ while(1){
                                     continue;
                                  }
 */
-                            //登录
+                            //请求-登录
                             if($type == 0x01 ){
                                 $login_msg=explode(";",$msg);
                                 $id = $login_msg[0];
@@ -106,7 +109,7 @@ while(1){
 
                                 }
 
-                                  $user_online[$id] = $connection;
+                                  $user_online[$id] = new connection($connection);
                                   fwrite($connection,'1');
                                   $token = create_token();
                                   $token_pool[$connection] = $token;
@@ -115,7 +118,7 @@ while(1){
                                   echo "iamhere";
                                   var_dump($user_online);
                             }
-                            //发送消息
+                            //请求-发送消息
                             if($type == 0x02) {
                               $fpos=strpos($msg,';');
                               $postID = substr($msg, 0,$fpos -1);
@@ -149,7 +152,8 @@ while(1){
                                 $result = mysqli_query($connect,$sql);
 
                              }
-
+                              
+                              
 
                             }
                              
@@ -212,10 +216,7 @@ function create_token(){
     return $token;
 } 
 
-function msg_encode($magic=0xabcd,$sign,$type,$msg){
-
-return  pack('nnnI',0xabcd,$sign,$type,strlen($msg)).$msg;
-}      
+  
 
 
 
